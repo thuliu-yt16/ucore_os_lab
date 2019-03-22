@@ -50,8 +50,9 @@ idt_init(void) {
 	extern uintptr_t __vectors[];
 	uint32_t i;
 	for(i = 0; i < 256; i ++){
-		SETGATE(idt[i], 1, GD_KTEXT, __vectors[i], DPL_KERNEL);
+		SETGATE(idt[i], 0, GD_KTEXT , __vectors[i], DPL_KERNEL);
 	}
+    SETGATE(idt[T_SWITCH_TOK], 0, GD_KTEXT, __vectors[T_SWITCH_TOK], DPL_USER);
 	lidt(&idt_pd);
 }
 
@@ -168,10 +169,21 @@ trap_dispatch(struct trapframe *tf) {
         c = cons_getc();
         cprintf("kbd [%03d] %c\n", c, c);
         break;
-    //LAB1 CHALLENGE 1 : YOUR CODE you should modify below codes.
+    //LAB1 CHALLENGE 1 : 2016011358 you should modify below codes.
     case T_SWITCH_TOU:
+        if(tf -> tf_cs != USER_CS){
+            tf -> tf_cs = USER_CS;
+            tf -> tf_ds = tf -> tf_es = tf -> tf_ss = USER_DS;
+            tf -> tf_esp = (uint32_t)tf + sizeof(struct trapframe) - 8;
+            tf -> tf_eflags |= FL_IOPL_MASK;
+        }
+		break;
     case T_SWITCH_TOK:
-        panic("T_SWITCH_** ??\n");
+        if(tf -> tf_cs != KERNEL_CS){
+            tf -> tf_cs = KERNEL_CS;
+            tf -> tf_ds = tf -> tf_es = KERNEL_DS;
+            tf -> tf_eflags &= ~FL_IOPL_MASK;
+        }
         break;
     case IRQ_OFFSET + IRQ_IDE1:
     case IRQ_OFFSET + IRQ_IDE2:
@@ -196,4 +208,3 @@ trap(struct trapframe *tf) {
     // dispatch based on what type of trap occurred
     trap_dispatch(tf);
 }
-
