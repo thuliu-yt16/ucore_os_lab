@@ -31,7 +31,6 @@ static struct pseudodesc idt_pd = {
     sizeof(idt) - 1, (uintptr_t)idt
 };
 
-static uint8_t clock_ticks = 0;
 /* idt_init - initialize IDT to each of the entry points in kern/trap/vectors.S */
 void
 idt_init(void) {
@@ -53,6 +52,7 @@ idt_init(void) {
 		SETGATE(idt[i], 0, GD_KTEXT , __vectors[i], DPL_KERNEL);
 	}
     SETGATE(idt[T_SWITCH_TOK], 0, GD_KTEXT, __vectors[T_SWITCH_TOK], DPL_USER);
+    SETGATE(idt[T_SYSCALL], 1, GD_KTEXT, __vectors[T_SYSCALL], DPL_USER);
 	lidt(&idt_pd);
 }
 
@@ -155,9 +155,8 @@ trap_dispatch(struct trapframe *tf) {
          * (2) Every TICK_NUM cycle, you can print some info using a funciton, such as print_ticks().
          * (3) Too Simple? Yes, I think so!
          */
-		clock_ticks ++;
-		if(clock_ticks == TICK_NUM){
-			clock_ticks = 0;
+		ticks ++;
+		if(ticks % TICK_NUM == 0){
 			print_ticks();
 		}
         break;
@@ -168,13 +167,31 @@ trap_dispatch(struct trapframe *tf) {
     case IRQ_OFFSET + IRQ_KBD:
         c = cons_getc();
         cprintf("kbd [%03d] %c\n", c, c);
+        if(c == '3'){
+            if(tf -> tf_cs != USER_CS){
+                tf -> tf_cs = USER_CS;
+                tf -> tf_ds = tf -> tf_es = tf -> tf_ss = USER_DS;
+                tf -> tf_eflags |= FL_IOPL_MASK;
+            }
+        }
+        else if(c == '0'){
+            if(tf -> tf_cs != KERNEL_CS){
+                tf -> tf_cs = KERNEL_CS;
+                tf -> tf_ds = tf -> tf_es = KERNEL_DS;
+                tf -> tf_eflags &= ~FL_IOPL_MASK;
+                memmove((uint32_t*)tf + 2, (uint32_t*)tf, sizeof(struct trapframe) - 8);
+                *((uint32_t*)tf - 1) = (uint32_t)tf + 8;
+            }
+        }
+        break;
+    case T_SYSCALL:
+        tf -> tf_regs.reg_eax = ticks;
         break;
     //LAB1 CHALLENGE 1 : 2016011358 you should modify below codes.
     case T_SWITCH_TOU:
         if(tf -> tf_cs != USER_CS){
             tf -> tf_cs = USER_CS;
             tf -> tf_ds = tf -> tf_es = tf -> tf_ss = USER_DS;
-            tf -> tf_esp = (uint32_t)tf + sizeof(struct trapframe) - 8;
             tf -> tf_eflags |= FL_IOPL_MASK;
         }
 		break;
