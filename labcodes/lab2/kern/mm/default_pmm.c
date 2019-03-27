@@ -12,7 +12,7 @@
  *  Please refer to Page 196~198, Section 8.2 of Yan Wei Min's Chinese book
  * "Data Structure -- C programming language".
 */
-// LAB2 EXERCISE 1: YOUR CODE
+// LAB2 EXERCISE 1: 2016011358
 // you should rewrite functions: `default_init`, `default_init_memmap`,
 // `default_alloc_pages`, `default_free_pages`.
 /*
@@ -52,7 +52,7 @@
  * (e.g.: `list_add_before(&free_list, &(p->page_link));` )
  *  Finally, we should update the sum of the free memory blocks: `nr_free += n`.
  * (4) `default_alloc_pages`:
- *  Search for the first free block (block size >= n) in the free list and reszie
+ *  Search for the first free block (block size >= n) in the free list and resize
  * the block found, returning the address of this block as the address required by
  * `malloc`.
  *  (4.1)
@@ -108,15 +108,21 @@ static void
 default_init_memmap(struct Page *base, size_t n) {
     assert(n > 0);
     struct Page *p = base;
+    // list_entry_t* pre = &(free_list.prev);
     for (; p != base + n; p ++) {
         assert(PageReserved(p));
         p->flags = p->property = 0;
         set_page_ref(p, 0);
+        // list_add(pre, &(p -> page_link));
+        // pre = pre -> next;
+        // if(pre != &(p -> page_link)){
+        //     cprintf("default_init_memmap error!!!!!!");
+        // }
     }
     base->property = n;
     SetPageProperty(base);
     nr_free += n;
-    list_add(&free_list, &(base->page_link));
+    list_add(list_prev(&free_list), &(base->page_link));
 }
 
 static struct Page *
@@ -135,12 +141,16 @@ default_alloc_pages(size_t n) {
         }
     }
     if (page != NULL) {
+        list_entry_t* prev_del = list_prev(&(page -> page_link));
         list_del(&(page->page_link));
         if (page->property > n) {
-            struct Page *p = page + n;
-            p->property = page->property - n;
-            list_add(&free_list, &(p->page_link));
-    }
+            struct Page *left_page = page + n;
+            left_page -> property = page -> property - n;
+            page -> property = n;
+            list_add(prev_del, &(left_page -> page_link));
+            SetPageProperty(left_page);
+            // list_add(&free_list, &(p->page_link));
+        }
         nr_free -= n;
         ClearPageProperty(page);
     }
@@ -158,24 +168,59 @@ default_free_pages(struct Page *base, size_t n) {
     }
     base->property = n;
     SetPageProperty(base);
-    list_entry_t *le = list_next(&free_list);
-    while (le != &free_list) {
-        p = le2page(le, page_link);
-        le = list_next(le);
-        if (base + base->property == p) {
-            base->property += p->property;
-            ClearPageProperty(p);
-            list_del(&(p->page_link));
+    list_entry_t* le = &free_list;
+
+    struct Page* page_prev = NULL;
+    struct Page* page_next = NULL;
+    bool touch_prev = 0, touch_next = 0;
+    while ((le = list_next(le))) {
+        if(list_prev(le) == &free_list){
+            page_prev = NULL;
         }
-        else if (p + p->property == base) {
-            p->property += base->property;
-            ClearPageProperty(base);
-            base = p;
-            list_del(&(p->page_link));
+        else{
+            page_prev = le2page(list_prev(le), page_link);
+            if(page_prev + page_prev -> property <= base){
+                touch_prev = page_prev + page_prev -> property == base;
+            }
+            else continue;
         }
+        if(le == &free_list){
+            page_next = NULL;
+        }
+        else{
+            page_next = le2page(le, page_link);
+            if(base + base -> property <= page_next){
+                touch_next = base + base -> property == page_next;
+            }
+            else continue;
+        }
+        break;
     }
+    if(touch_next){
+        ClearPageProperty(page_next);
+        base -> property += page_next -> property;
+        list_del(&(page_next -> page_link));
+    }
+    list_entry_t* ins_pos = (page_prev == NULL) ? &(free_list) : &(page_prev -> page_link);
+    if(touch_prev){
+        ClearPageProperty(base);
+        page_prev -> property += base -> property;
+    }
+    else{
+        list_add(ins_pos, &(base -> page_link));
+    }
+    // if (base + base -> property == p) {
+    //     base -> property += p -> property;
+    //     ClearPageProperty(p);
+    //     list_del(&(p->page_link));
+    // }
+    // else if (p + p->property == base) {
+    //     p->property += base->property;
+    //     ClearPageProperty(base);
+    //     base = p;
+    //     list_del(&(p->page_link));
+    // }
     nr_free += n;
-    list_add(&free_list, &(base->page_link));
 }
 
 static size_t
@@ -234,7 +279,7 @@ basic_check(void) {
     free_page(p2);
 }
 
-// LAB2: below code is used to check the first fit allocation algorithm (your EXERCISE 1) 
+// LAB2: below code is used to check the first fit allocation algorithm (your EXERCISE 1)
 // NOTICE: You SHOULD NOT CHANGE basic_check, default_check functions!
 static void
 default_check(void) {
@@ -308,4 +353,3 @@ const struct pmm_manager default_pmm_manager = {
     .nr_free_pages = default_nr_free_pages,
     .check = default_check,
 };
-
