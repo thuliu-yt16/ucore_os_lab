@@ -291,10 +291,8 @@ pmm_init(void) {
     page_init();
     
 
-    cprintf("check\n");
     //use pmm->check to verify the correctness of the alloc/free function in a pmm
     check_alloc_page();
-    cprintf("check end\n");
 
     check_pgdir();
 
