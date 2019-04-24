@@ -65,7 +65,7 @@ _fifo_swap_out_victim(struct mm_struct *mm, struct Page ** ptr_page, int in_tick
     assert(head != NULL);
     assert(in_tick == 0);
     /* Select the victim */
-    /*LAB3 EXERCISE 2: YOUR CODE*/
+    /*LAB3 EXERCISE 2: 2016011358*/
     //(1)  unlink the  earliest arrival page in front of pra_list_head qeueue
     list_entry_t *del = list_next(head);
     list_del(del);
