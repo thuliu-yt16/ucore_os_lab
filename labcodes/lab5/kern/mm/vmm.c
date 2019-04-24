@@ -460,6 +460,7 @@ do_pgfault(struct mm_struct *mm, uint32_t error_code, uintptr_t addr) {
         //    into the memory which page managed.
         //(2) According to the mm, addr AND page, setup the map of phy addr <---> logical addr
         //(3) make the page swappable.
+        #ifndef COPY_ON_WRITE
         struct Page* page = NULL;
         if(*ptep & PTE_P){
             panic("error write on a non-writable pte");
@@ -467,7 +468,6 @@ do_pgfault(struct mm_struct *mm, uint32_t error_code, uintptr_t addr) {
         else{
             if(swap_init_ok){
                 swap_in(mm, addr, &page);
-
             }
             else{
                 cprintf("no swap_init_ok but ptep is %x, failed\n",*ptep);
@@ -477,6 +477,37 @@ do_pgfault(struct mm_struct *mm, uint32_t error_code, uintptr_t addr) {
         page_insert(mm -> pgdir, page, addr, perm);
         swap_map_swappable(mm, addr, page, 1);
         page -> pra_vaddr = addr;
+        #else
+        struct Page* page = NULL;
+        if(*ptep & PTE_P){
+            struct Page* sharedPage = pte2page(*ptep);
+            assert(sharedPage != NULL);
+            if(sharedPage -> ref > 1){
+                page = alloc_page();
+                assert(page != NULL);
+                void* src_kvaddr = page2kva(sharedPage);
+                void* dst_kvaddr = page2kva(page);
+                memcpy(dst_kvaddr, src_kvaddr, PGSIZE);
+                cprintf("*******Shared page copied!*******\n");
+            }
+            else{
+                page = sharedPage;
+                cprintf("*******shared page canceled!*******\n");
+            }
+        }
+        else{
+            if(swap_init_ok){
+                swap_in(mm, addr, &page);
+            }
+            else{
+                cprintf("no swap_init_ok but ptep is %x, failed\n",*ptep);
+                goto failed;
+            }
+        }
+        page_insert(mm -> pgdir, page, addr, perm);
+        swap_map_swappable(mm, addr, page, 1);
+        page -> pra_vaddr = addr;
+        #endif
    }
 #if 0
     /*LAB3 EXERCISE 1: 2016011358*/
