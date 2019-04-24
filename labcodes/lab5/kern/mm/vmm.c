@@ -456,21 +456,27 @@ do_pgfault(struct mm_struct *mm, uint32_t error_code, uintptr_t addr) {
        pgdir_alloc_page(mm -> pgdir, addr, perm);
    }
    else{
-        if(swap_init_ok) {
-            struct Page *page=NULL;
-            //(1）According to the mm AND addr, try to load the content of right disk page
-            //    into the memory which page managed.
-            swap_in(mm, addr, &page);
-            //(2) According to the mm, addr AND page, setup the map of phy addr <---> logical addr
-            page_insert(mm -> pgdir, page, addr, perm);
-            //(3) make the page swappable.
-            swap_map_swappable(mm, addr, page, 1);
-            page -> pra_vaddr = addr;
+        //(1）According to the mm AND addr, try to load the content of right disk page
+        //    into the memory which page managed.
+        //(2) According to the mm, addr AND page, setup the map of phy addr <---> logical addr
+        //(3) make the page swappable.
+        struct Page* page = NULL;
+        if(*ptep & PTE_P){
+            panic("error write on a non-writable pte");
         }
-        else {
-            cprintf("no swap_init_ok but ptep is %x, failed\n",*ptep);
-            goto failed;
+        else{
+            if(swap_init_ok){
+                swap_in(mm, addr, &page);
+
+            }
+            else{
+                cprintf("no swap_init_ok but ptep is %x, failed\n",*ptep);
+                goto failed;
+            }
         }
+        page_insert(mm -> pgdir, page, addr, perm);
+        swap_map_swappable(mm, addr, page, 1);
+        page -> pra_vaddr = addr;
    }
 #if 0
     /*LAB3 EXERCISE 1: 2016011358*/
@@ -506,7 +512,7 @@ do_pgfault(struct mm_struct *mm, uint32_t error_code, uintptr_t addr) {
                                     //    into the memory which page managed.
                                     //(2) According to the mm, addr AND page, setup the map of phy addr <---> logical addr
                                     //(3) make the page swappable.
-                                    //(4) [NOTICE]: you myabe need to update your lab3's implementation for LAB5's normal execution.
+                                    //(4) [NOTICE]: you maybe need to update your lab3's implementation for LAB5's normal execution.
         }
         else {
             cprintf("no swap_init_ok but ptep is %x, failed\n",*ptep);
